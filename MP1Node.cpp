@@ -295,29 +295,41 @@ void MP1Node::printAddress(Address *addr) {
  * DESCRIPTION: handle a JOINREQ message
  */
 void MP1Node::handleJOINREQ(void *env, char *data, int size) {
-    // create JOINREP message
-    MessageHdr msg;
-    msg.msgType = JOINREP;
+    char *msg;
 
-    // extract the address
-    Address *addr = (Address *)(data + sizeof(MessageHdr) + 1);
+    // create JOINREP message header
+    MessageHdr msgHeader;
+    msgHeader.msgType = JOINREP;
+
+    // extract the address and heartbeat of the sender
+    Address addr;
     int id;
     short port;
-    memcpy(&id, addr, sizeof(int));
-    memcpy(&port, &addr[4], sizeof(short));
-
-    // add new node to the membership list
-    MemberListEntry newEntry(id, port, 0, time(NULL));
-    memberNode->memberList.push_back(newEntry);
-
-#ifdef DEBUGLOG
-    log->logNodeAdd(&memberNode->addr, addr);
-#endif
+    long heartbeat;
+    memcpy(addr.addr, data + sizeof(MessageHdr), sizeof(addr.addr));
+    memcpy(&id, addr.addr, sizeof(int));
+    memcpy(&port, &addr.addr[4], sizeof(short));
+    memcpy(&heartbeat, data + sizeof(MessageHdr) + sizeof(addr.addr), sizeof(long));
 
     // serialize membership list
     vector<MemberListEntry> *memberList = &memberNode->memberList;
     char *membershipList = (char *)memberList;
+
+    // create JOINREP message
+    size_t msgsize = sizeof(msgHeader) + sizeof(memberNode->addr.addr) + sizeof(*membershipList);
+    msg = (char *)malloc(msgsize);
+    memcpy(msg, &msgHeader, sizeof(msgHeader));
+    memcpy(msg + sizeof(msgHeader), addr.addr, sizeof(addr.addr));
+    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr), membershipList, sizeof(*membershipList));
     
     // send JOINREP message
-    emulNet->ENsend(&memberNode->addr, addr, membershipList, sizeof(membershipList));
+    emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
+
+#ifdef DEBUGLOG
+    log->logNodeAdd(&memberNode->addr, &addr);
+#endif
+
+    // add new node to the membership list
+    MemberListEntry newEntry(id, port, heartbeat, time(NULL));
+    memberNode->memberList.push_back(newEntry);
 }
