@@ -156,9 +156,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
  * DESCRIPTION: Wind up this node and clean up state
  */
 int MP1Node::finishUpThisNode(){
-   /*
-    * Your code goes here
-    */
+   return 0;
 }
 
 /**
@@ -220,7 +218,11 @@ bool MP1Node::recvCallBack(void *env, char *data, int size) {
             break;
 
         case JOINREP:
-            cout << "JOINREP" << '\n';
+            handleJOINREP(env, data, size);
+            break;
+
+        case GOSSIP:
+            handleGOSSIP(env, data, size);
             break;
     }
 
@@ -235,8 +237,6 @@ bool MP1Node::recvCallBack(void *env, char *data, int size) {
  * 				Propagate your membership list
  */
 void MP1Node::nodeLoopOps() {
-    // cout << "nodeLoopOps\n";
-
     return;
 }
 
@@ -290,9 +290,45 @@ void MP1Node::printAddress(Address *addr) {
 }
 
 /**
+ * FUNCTION NAME: serializeMemberList
+ * 
+ * DESCRIPTION: Serialize the memebership list
+ */
+char * MP1Node::serializeMemberList() {
+    char *serializedList;
+    vector<MemberListEntry> *memberList = &memberNode->memberList;
+
+    // allocate memory
+    size_t size = memberList->size() * sizeof(MemberListEntry);
+    serializedList = (char *)malloc(size);
+
+    for ( int i = 0; i < memberList->size(); i++ ) {
+        memcpy(serializedList + (i * sizeof(MemberListEntry)), &(*memberList)[i], sizeof(MemberListEntry));
+    }
+
+    return serializedList;
+}
+
+/**
+ * FUNCTION NAME: deserializeMemberList
+ * 
+ * DESCRIPTION: Deserialize the memebership list
+ */
+vector<MemberListEntry> MP1Node::deserializeMemberList(char *data, int size) {
+    vector<MemberListEntry> memberList;
+
+    for ( int i = 0; i < size; i++ ) {
+        MemberListEntry *entry = (MemberListEntry *)(data + (i * sizeof(MemberListEntry)));
+        memberList.push_back(*entry);
+    }
+
+    return memberList;
+}
+
+/**
  * FUNCTION NAME: handleJOINREQ
  * 
- * DESCRIPTION: handle a JOINREQ message
+ * DESCRIPTION: Handle a join request message
  */
 void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     char *msg;
@@ -301,7 +337,7 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     MessageHdr msgHeader;
     msgHeader.msgType = JOINREP;
 
-    // extract the address and heartbeat of the sender
+    // get the address and heartbeat of the sender
     Address addr;
     int id;
     short port;
@@ -311,17 +347,20 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     memcpy(&port, &addr.addr[4], sizeof(short));
     memcpy(&heartbeat, data + sizeof(MessageHdr) + sizeof(addr.addr), sizeof(long));
 
-    // serialize membership list
-    vector<MemberListEntry> *memberList = &memberNode->memberList;
-    char *membershipList = (char *)memberList;
+    // allocate memory
+    int n = memberNode->memberList.size();
+    size_t msgsize = sizeof(msgHeader) +
+        sizeof(memberNode->addr.addr) +
+        sizeof(int) +
+        n * sizeof(MemberListEntry);
+    msg = (char *)malloc(msgsize);
 
     // create JOINREP message
-    size_t msgsize = sizeof(msgHeader) + sizeof(memberNode->addr.addr) + sizeof(*membershipList);
-    msg = (char *)malloc(msgsize);
     memcpy(msg, &msgHeader, sizeof(msgHeader));
     memcpy(msg + sizeof(msgHeader), addr.addr, sizeof(addr.addr));
-    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr), membershipList, sizeof(*membershipList));
-    
+    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr), &n, sizeof(int));
+    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr) + sizeof(int), serializeMemberList(), n * sizeof(MemberListEntry));
+
     // send JOINREP message
     emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
 
@@ -332,4 +371,22 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     // add new node to the membership list
     MemberListEntry newEntry(id, port, heartbeat, time(NULL));
     memberNode->memberList.push_back(newEntry);
+}
+
+/**
+ * FUNCTION NAME: handleJOINREP
+ * 
+ * DESCRIPTION: Handle a join response message
+ */
+void MP1Node::handleJOINREP(void *env, char *data, int size) {
+    return;
+}
+
+/**
+ * FUNCTION NAME: handleGOSSIP
+ * 
+ * DESCRIPTION: Handle a gossip message
+ */
+void MP1Node::handleGOSSIP(void *env, char *data, int size) {
+    return;
 }

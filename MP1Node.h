@@ -27,7 +27,7 @@
 enum MsgTypes {
     JOINREQ,
     JOINREP,
-    DUMMYLASTMSGTYPE
+    GOSSIP
 };
 
 /**
@@ -73,7 +73,11 @@ public:
 	void printAddress(Address *addr);
 	virtual ~MP1Node();
 
+	char * serializeMemberList();
+	vector<MemberListEntry> deserializeMemberList(char *data, int size);
 	void handleJOINREQ(void *env, char *data, int size);
+	void handleJOINREP(void *env, char *data, int size);
+	void handleGOSSIP(void *env, char *data, int size);
 };
 
 #endif /* _MP1NODE_H_ */
