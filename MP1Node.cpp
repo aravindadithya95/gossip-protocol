@@ -7,17 +7,13 @@
 
 #include "MP1Node.h"
 
-/*
- * Note: You can change/add any functions in MP1Node.{h,cpp}
- */
-
 /**
  * Overloaded Constructor of the MP1Node class
  * You can add new members to the class if you think it
  * is necessary for your logic to work
  */
 MP1Node::MP1Node(Member *member, Params *params, EmulNet *emul, Log *log, Address *address) {
-	for( int i = 0; i < 6; i++ ) {
+	for ( int i = 0; i < 6; i++ ) {
 		NULLADDR[i] = 0;
 	}
 	this->memberNode = member;
@@ -69,14 +65,14 @@ void MP1Node::nodeStart(char *servaddrstr, short servport) {
     joinaddr = getJoinAddress();
 
     // Self booting routines
-    if( initThisNode(&joinaddr) == -1 ) {
+    if ( initThisNode(&joinaddr) == -1 ) {
 #ifdef DEBUGLOG
         log->LOG(&memberNode->addr, "init_thisnode failed. Exit.");
 #endif
         exit(1);
     }
 
-    if( !introduceSelfToGroup(&joinaddr) ) {
+    if ( !introduceSelfToGroup(&joinaddr) ) {
         finishUpThisNode();
 #ifdef DEBUGLOG
         log->LOG(&memberNode->addr, "Unable to join self to group. Exiting.");
@@ -123,7 +119,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
     static char s[1024];
 #endif
 
-    if ( 0 == memcmp((char *)&(memberNode->addr.addr), (char *)&(joinaddr->addr), sizeof(memberNode->addr.addr))) {
+    if ( 0 == memcmp((char *)&(memberNode->addr.addr), (char *)&(joinaddr->addr), sizeof(memberNode->addr.addr)) ) {
         // I am the group booter (first process to join the group). Boot up the group
 #ifdef DEBUGLOG
         log->LOG(&memberNode->addr, "Starting up group...");
@@ -180,7 +176,7 @@ void MP1Node::nodeLoop() {
     checkMessages();
 
     // Wait until you're in the group...
-    if( !memberNode->inGroup ) {
+    if ( !memberNode->inGroup ) {
     	return;
     }
 
@@ -214,10 +210,21 @@ void MP1Node::checkMessages() {
  *
  * DESCRIPTION: Message handler for different message types
  */
-bool MP1Node::recvCallBack(void *env, char *data, int size ) {
-	/*
-	 * Your code goes here
-	 */
+bool MP1Node::recvCallBack(void *env, char *data, int size) {
+    // extract message header
+    MessageHdr *message = (MessageHdr *)data;
+
+    switch ( message->msgType ) {
+        case JOINREQ:
+            handleJOINREQ(env, data, size);
+            break;
+
+        case JOINREP:
+            cout << "JOINREP" << '\n';
+            break;
+    }
+
+    return true;
 }
 
 /**
@@ -228,10 +235,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
  * 				Propagate your membership list
  */
 void MP1Node::nodeLoopOps() {
-
-	/*
-	 * Your code goes here
-	 */
+    // cout << "nodeLoopOps\n";
 
     return;
 }
@@ -274,8 +278,46 @@ void MP1Node::initMemberListTable(Member *memberNode) {
  *
  * DESCRIPTION: Print the Address
  */
-void MP1Node::printAddress(Address *addr)
-{
-    printf("%d.%d.%d.%d:%d \n",  addr->addr[0],addr->addr[1],addr->addr[2],
-                                                       addr->addr[3], *(short*)&addr->addr[4]) ;    
+void MP1Node::printAddress(Address *addr) {
+    printf(
+        "%d.%d.%d.%d:%d \n",
+        addr->addr[0],
+        addr->addr[1],
+        addr->addr[2],
+        addr->addr[3],
+        *(short*)&addr->addr[4]
+    );    
+}
+
+/**
+ * FUNCTION NAME: handleJOINREQ
+ * 
+ * DESCRIPTION: handle a JOINREQ message
+ */
+void MP1Node::handleJOINREQ(void *env, char *data, int size) {
+    // create JOINREP message
+    MessageHdr msg;
+    msg.msgType = JOINREP;
+
+    // extract the address
+    Address *addr = (Address *)(data + sizeof(MessageHdr) + 1);
+    int id;
+    short port;
+    memcpy(&id, addr, sizeof(int));
+    memcpy(&port, &addr[4], sizeof(short));
+
+    // add new node to the membership list
+    MemberListEntry newEntry(id, port, 0, time(NULL));
+    memberNode->memberList.push_back(newEntry);
+
+#ifdef DEBUGLOG
+    log->logNodeAdd(&memberNode->addr, addr);
+#endif
+
+    // serialize membership list
+    vector<MemberListEntry> *memberList = &memberNode->memberList;
+    char *membershipList = (char *)memberList;
+    
+    // send JOINREP message
+    emulNet->ENsend(&memberNode->addr, addr, membershipList, sizeof(membershipList));
 }

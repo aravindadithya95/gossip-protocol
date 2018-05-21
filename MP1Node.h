@@ -21,14 +21,10 @@
 #define TREMOVE 20
 #define TFAIL 5
 
-/*
- * Note: You can change/add any functions in MP1Node.{h,cpp}
- */
-
 /**
  * Message Types
  */
-enum MsgTypes{
+enum MsgTypes {
     JOINREQ,
     JOINREP,
     DUMMYLASTMSGTYPE
@@ -41,7 +37,7 @@ enum MsgTypes{
  */
 typedef struct MessageHdr {
 	enum MsgTypes msgType;
-}MessageHdr;
+} MessageHdr;
 
 /**
  * CLASS NAME: MP1Node
@@ -76,6 +72,8 @@ public:
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
 	virtual ~MP1Node();
+
+	void handleJOINREQ(void *env, char *data, int size);
 };
 
 #endif /* _MP1NODE_H_ */
