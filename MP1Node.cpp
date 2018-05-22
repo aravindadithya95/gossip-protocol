@@ -364,13 +364,9 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     // send JOINREP message
     emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
 
-#ifdef DEBUGLOG
-    log->logNodeAdd(&memberNode->addr, &addr);
-#endif
-
-    // add new node to the membership list
-    MemberListEntry newEntry(id, port, heartbeat, time(NULL));
-    memberNode->memberList.push_back(newEntry);
+    // update membership list
+    vector<MemberListEntry> list(1, MemberListEntry(id, port, heartbeat, par->getcurrtime()));
+    updateMemberList(&list);
 }
 
 /**
@@ -379,7 +375,15 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
  * DESCRIPTION: Handle a join response message
  */
 void MP1Node::handleJOINREP(void *env, char *data, int size) {
-    return;
+    // deserialize data
+    Address addr;
+    int n;
+    vector<MemberListEntry> memberList;
+    memcpy(addr.addr, data + sizeof(MessageHdr), sizeof(addr.addr));
+    memcpy(&n, data + sizeof(MessageHdr) + sizeof(addr.addr), sizeof(int));
+    memberList = deserializeMemberList(data + sizeof(MessageHdr) + sizeof(addr.addr) + sizeof(int), n);
+    
+    updateMemberList(&memberList);
 }
 
 /**
@@ -389,4 +393,48 @@ void MP1Node::handleJOINREP(void *env, char *data, int size) {
  */
 void MP1Node::handleGOSSIP(void *env, char *data, int size) {
     return;
+}
+
+void MP1Node::updateMemberList(vector<MemberListEntry> *inputList) {
+    vector<MemberListEntry> *memberList = &memberNode->memberList;
+    for ( int i = 0; i < inputList->size(); i++ ) {
+        int j;
+        for ( j = 0; j < memberList->size(); j++ ) {
+            // find an existing entry
+            if ( (*inputList)[i].getid() == (*memberList)[j].getid() &&
+                (*inputList)[i].getport() == (*memberList)[j].getport() ) {
+                // compare heartbeats
+                if ((*inputList)[i].getheartbeat() > (*memberList)[j].getheartbeat()) {
+                    // update if entry is newer
+                    (*memberList)[j].setheartbeat((*inputList)[i].getheartbeat());
+                    (*memberList)[j].settimestamp(par->getcurrtime());
+                }
+                break;
+            }
+        }
+        // if the node isn't in the membership list, add the node
+        if ( j == memberList->size() ) {
+#ifdef DEBUGLOG
+            Address addr = getAddress((*inputList)[i].getid(), (*inputList)[i].getport());
+            log->logNodeAdd(&memberNode->addr, &addr);
+#endif
+            memberNode->memberList.push_back(
+                MemberListEntry(
+                    (*inputList)[i].getid(),
+                    (*inputList)[i].getport(),
+                    (*inputList)[i].getheartbeat(),
+                    par->getcurrtime()
+                )
+            );
+        }
+    }
+}
+
+/**
+ * FUNCTION NAME: getAddress
+ * 
+ * DESCRIPTION: Generate address string for the constructor
+ */
+string MP1Node::getAddress(int id, short port) {
+    return to_string(id) + ":" + to_string(port);
 }

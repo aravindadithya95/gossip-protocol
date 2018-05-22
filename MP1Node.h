@@ -78,6 +78,8 @@ public:
 	void handleJOINREQ(void *env, char *data, int size);
 	void handleJOINREP(void *env, char *data, int size);
 	void handleGOSSIP(void *env, char *data, int size);
+	void updateMemberList(vector<MemberListEntry> *inputList);
+	string getAddress(int id, short port);
 };
 
 #endif /* _MP1NODE_H_ */
