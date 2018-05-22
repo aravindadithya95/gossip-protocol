@@ -367,6 +367,9 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     // update membership list
     vector<MemberListEntry> list(1, MemberListEntry(id, port, heartbeat, par->getcurrtime()));
     updateMemberList(&list);
+
+    // deallocate memory
+    free(msg);
 }
 
 /**
@@ -392,7 +395,13 @@ void MP1Node::handleJOINREP(void *env, char *data, int size) {
  * DESCRIPTION: Handle a gossip message
  */
 void MP1Node::handleGOSSIP(void *env, char *data, int size) {
-    return;
+    // deserialize data
+    int n;
+    vector<MemberListEntry> memberList;
+    memcpy(&n, data + sizeof(MessageHdr), sizeof(int));
+    memberList = deserializeMemberList(data + sizeof(MessageHdr) + sizeof(int), n);
+
+    updateMemberList(&memberList);
 }
 
 void MP1Node::updateMemberList(vector<MemberListEntry> *inputList) {
@@ -460,6 +469,7 @@ void MP1Node::gossipMemberList(int n) {
 
     // create GOSSIP message
     memcpy(msg, &msgHeader, sizeof(msgHeader));
+    memcpy(msg + sizeof(msgHeader), &size, sizeof(int));
     memcpy(msg + sizeof(msgHeader) + sizeof(int), serializeMemberList(), size * sizeof(MemberListEntry));
 
     n = min(n, size);
@@ -474,5 +484,6 @@ void MP1Node::gossipMemberList(int n) {
         emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
     }
 
-    delete(msg);
+    // deallocate memory
+    free(msg);
 }
