@@ -79,7 +79,9 @@ public:
 	void handleJOINREP(void *env, char *data, int size);
 	void handleGOSSIP(void *env, char *data, int size);
 	void updateMemberList(vector<MemberListEntry> *inputList);
-	string getAddress(int id, short port);
+	Address getAddress(int id, short port);
+	void gossipMemberList(int n=2);
+	void sendMemberList(MsgTypes msgType, Address *addr);
 };
 
 #endif /* _MP1NODE_H_ */

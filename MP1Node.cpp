@@ -237,7 +237,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size) {
  * 				Propagate your membership list
  */
 void MP1Node::nodeLoopOps() {
-    return;
+    gossipMemberList();
 }
 
 /**
@@ -382,7 +382,7 @@ void MP1Node::handleJOINREP(void *env, char *data, int size) {
     memcpy(addr.addr, data + sizeof(MessageHdr), sizeof(addr.addr));
     memcpy(&n, data + sizeof(MessageHdr) + sizeof(addr.addr), sizeof(int));
     memberList = deserializeMemberList(data + sizeof(MessageHdr) + sizeof(addr.addr) + sizeof(int), n);
-    
+
     updateMemberList(&memberList);
 }
 
@@ -433,8 +433,46 @@ void MP1Node::updateMemberList(vector<MemberListEntry> *inputList) {
 /**
  * FUNCTION NAME: getAddress
  * 
- * DESCRIPTION: Generate address string for the constructor
+ * DESCRIPTION: Create address object with the given id and port values
  */
-string MP1Node::getAddress(int id, short port) {
-    return to_string(id) + ":" + to_string(port);
+Address MP1Node::getAddress(int id, short port) {
+    return Address(to_string(id) + ":" + to_string(port));
+}
+
+/**
+ * FUNCTION NAME: gossipMemberList
+ * 
+ * DESCRIPTION: Gossip the membership list to select nodes
+ */
+void MP1Node::gossipMemberList(int n) {
+    char *msg;
+
+    // create GOSSIP message header
+    MessageHdr msgHeader;
+    msgHeader.msgType = GOSSIP;
+
+    // allocate memory
+    int size = memberNode->memberList.size();
+    size_t msgsize = sizeof(msgHeader) +
+        sizeof(int) +
+        size * sizeof(MemberListEntry);
+    msg = (char *)malloc(msgsize);
+
+    // create GOSSIP message
+    memcpy(msg, &msgHeader, sizeof(msgHeader));
+    memcpy(msg + sizeof(msgHeader) + sizeof(int), serializeMemberList(), size * sizeof(MemberListEntry));
+
+    n = min(n, size);
+    for ( int i = 0; i < n; i++ ) {
+        int idx = rand() % (memberNode->memberList.size() - 1);
+
+        Address addr = getAddress(
+            memberNode->memberList[idx].getid(), memberNode->memberList[idx].getport()
+        );
+        
+        // send GOSSIP
+        emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
+    }
+
+    delete(msg);
 }
