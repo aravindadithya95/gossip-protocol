@@ -93,7 +93,7 @@ int MP1Node::initThisNode(Address *joinaddr) {
 	 * This function is partially implemented and may require changes
 	 */
 	int id = *(int*)(&memberNode->addr.addr);
-	int port = *(short*)(&memberNode->addr.addr[4]);
+	short port = *(short*)(&memberNode->addr.addr[4]);
 
 	memberNode->bFailed = false;
 	memberNode->inited = true;
@@ -103,7 +103,7 @@ int MP1Node::initThisNode(Address *joinaddr) {
 	memberNode->heartbeat = 0;
 	memberNode->pingCounter = TFAIL;
 	memberNode->timeOutCounter = -1;
-    initMemberListTable(memberNode);
+    initMemberListTable(memberNode, id, port);
 
     return 0;
 }
@@ -237,6 +237,11 @@ bool MP1Node::recvCallBack(void *env, char *data, int size) {
  * 				Propagate your membership list
  */
 void MP1Node::nodeLoopOps() {
+    // update my heartbeat and timestamp
+    memberNode->heartbeat++;
+    memberNode->memberList[0].setheartbeat(memberNode->heartbeat);
+    memberNode->memberList[0].settimestamp(par->getcurrtime());
+
     gossipMemberList();
 }
 
@@ -269,8 +274,11 @@ Address MP1Node::getJoinAddress() {
  *
  * DESCRIPTION: Initialize the membership list
  */
-void MP1Node::initMemberListTable(Member *memberNode) {
+void MP1Node::initMemberListTable(Member *memberNode, int id, short port) {
 	memberNode->memberList.clear();
+    memberNode->memberList.push_back(
+        MemberListEntry(id, port, memberNode->heartbeat, par->getcurrtime())
+    );
 }
 
 /**
@@ -378,6 +386,9 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
  * DESCRIPTION: Handle a join response message
  */
 void MP1Node::handleJOINREP(void *env, char *data, int size) {
+    // update node status
+    memberNode->inGroup = true;
+
     // deserialize data
     Address addr;
     int n;
@@ -423,6 +434,9 @@ void MP1Node::updateMemberList(vector<MemberListEntry> *inputList) {
         }
         // if the node isn't in the membership list, add the node
         if ( j == memberList->size() ) {
+            // update node status
+            memberNode->nnb++;
+
 #ifdef DEBUGLOG
             Address addr = getAddress((*inputList)[i].getid(), (*inputList)[i].getport());
             log->logNodeAdd(&memberNode->addr, &addr);
