@@ -89,9 +89,6 @@ void MP1Node::nodeStart(char *servaddrstr, short servport) {
  * DESCRIPTION: Find out who I am and start up
  */
 int MP1Node::initThisNode(Address *joinaddr) {
-	/*
-	 * This function is partially implemented and may require changes
-	 */
 	int id = *(int*)(&memberNode->addr.addr);
 	short port = *(short*)(&memberNode->addr.addr[4]);
 
@@ -242,6 +239,10 @@ void MP1Node::nodeLoopOps() {
     memberNode->memberList[0].setheartbeat(memberNode->heartbeat);
     memberNode->memberList[0].settimestamp(par->getcurrtime());
 
+    // check membership list for timeouts
+    checkMemberList();
+
+    // gossip membership list to select nodes
     gossipMemberList();
 }
 
@@ -500,4 +501,32 @@ void MP1Node::gossipMemberList(int n) {
 
     // deallocate memory
     free(msg);
+}
+
+/**
+ * FUNCTION NAME: checkMemberList
+ * 
+ * DESCRIPTION: check the membership list for TFAIL and TREMOVE timeouts
+ */
+void MP1Node::checkMemberList() {
+    int time = par->getcurrtime();
+    vector<MemberListEntry>::iterator it = memberNode->memberList.begin();
+    while ( it != memberNode->memberList.end() ) {
+        if ( time - it->gettimestamp() > TREMOVE ) {
+            // if TREMOVE times out, remove node from membership list
+#ifdef DEBUGLOG
+            Address addr = getAddress(it->getid(), it->getport());
+            log->logNodeRemove(&memberNode->addr, &addr);
+#endif
+            it = memberNode->memberList.erase(it);
+            // it++;
+        } else {
+            if ( time - it->gettimestamp() > TFAIL ) {
+                /** if TFAIL times out, mark node as timed out
+                 * TODO: add timed out node to map
+                 */
+            }
+            it++;
+        }
+    }
 }
