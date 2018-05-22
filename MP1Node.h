@@ -82,7 +82,7 @@ public:
 	Address getAddress(int id, short port);
 	void gossipMemberList(int n=2);
 	void sendMemberList(MsgTypes msgType, Address *addr);
-	void checkMemberList();
+	void removeFailedNodes();
 };
 
 #endif /* _MP1NODE_H_ */

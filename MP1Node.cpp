@@ -239,8 +239,8 @@ void MP1Node::nodeLoopOps() {
     memberNode->memberList[0].setheartbeat(memberNode->heartbeat);
     memberNode->memberList[0].settimestamp(par->getcurrtime());
 
-    // check membership list for timeouts
-    checkMemberList();
+    // remove failed nodes from the membership list
+    removeFailedNodes();
 
     // gossip membership list to select nodes
     gossipMemberList();
@@ -308,12 +308,20 @@ char * MP1Node::serializeMemberList() {
     vector<MemberListEntry> *memberList = &memberNode->memberList;
 
     // allocate memory
-    size_t size = memberList->size() * sizeof(MemberListEntry);
+    size_t size = sizeof(int) + memberList->size() * sizeof(MemberListEntry);
     serializedList = (char *)malloc(size);
 
-    for ( int i = 0; i < memberList->size(); i++ ) {
-        memcpy(serializedList + (i * sizeof(MemberListEntry)), &(*memberList)[i], sizeof(MemberListEntry));
+    int n = memberList->size(), time = par->getcurrtime();
+    for ( int i = 0, j = 0; i < memberList->size(); i++ ) {
+        // check if the heartbeat has timed out
+        if ( time - (*memberList)[i].gettimestamp() < TFAIL ) {
+            memcpy(serializedList + sizeof(int) + j * sizeof(MemberListEntry), &(*memberList)[i], sizeof(MemberListEntry));
+            j++;
+        } else {
+            n--;
+        }
     }
+    memcpy(serializedList, &n, sizeof(int));
 
     return serializedList;
 }
@@ -356,8 +364,12 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     memcpy(&port, &addr.addr[4], sizeof(short));
     memcpy(&heartbeat, data + sizeof(MessageHdr) + sizeof(addr.addr), sizeof(long));
 
+    // get serialized membership list
+    char *serializedList = serializeMemberList();
+
     // allocate memory
-    int n = memberNode->memberList.size();
+    int n;
+    memcpy(&n, serializedList, sizeof(int));
     size_t msgsize = sizeof(msgHeader) +
         sizeof(memberNode->addr.addr) +
         sizeof(int) +
@@ -367,8 +379,7 @@ void MP1Node::handleJOINREQ(void *env, char *data, int size) {
     // create JOINREP message
     memcpy(msg, &msgHeader, sizeof(msgHeader));
     memcpy(msg + sizeof(msgHeader), addr.addr, sizeof(addr.addr));
-    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr), &n, sizeof(int));
-    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr) + sizeof(int), serializeMemberList(), n * sizeof(MemberListEntry));
+    memcpy(msg + sizeof(msgHeader) + sizeof(addr.addr), serializedList, sizeof(int) + n * sizeof(MemberListEntry));
 
     // send JOINREP message
     emulNet->ENsend(&memberNode->addr, &addr, msg, msgsize);
@@ -475,8 +486,12 @@ void MP1Node::gossipMemberList(int n) {
     MessageHdr msgHeader;
     msgHeader.msgType = GOSSIP;
 
+    // get serialized membership list
+    char *serializedList = serializeMemberList();
+
     // allocate memory
-    int size = memberNode->memberList.size();
+    int size;
+    memcpy(&size, serializedList, sizeof(int));
     size_t msgsize = sizeof(msgHeader) +
         sizeof(int) +
         size * sizeof(MemberListEntry);
@@ -484,8 +499,7 @@ void MP1Node::gossipMemberList(int n) {
 
     // create GOSSIP message
     memcpy(msg, &msgHeader, sizeof(msgHeader));
-    memcpy(msg + sizeof(msgHeader), &size, sizeof(int));
-    memcpy(msg + sizeof(msgHeader) + sizeof(int), serializeMemberList(), size * sizeof(MemberListEntry));
+    memcpy(msg + sizeof(msgHeader), serializedList, sizeof(int) + size * sizeof(MemberListEntry));
 
     n = min(n, size);
     for ( int i = 0; i < n; i++ ) {
@@ -504,29 +518,23 @@ void MP1Node::gossipMemberList(int n) {
 }
 
 /**
- * FUNCTION NAME: checkMemberList
+ * FUNCTION NAME: removeFailedNodes
  * 
- * DESCRIPTION: check the membership list for TFAIL and TREMOVE timeouts
+ * DESCRIPTION: Remove the failed nodes from the membership list
  */
-void MP1Node::checkMemberList() {
+void MP1Node::removeFailedNodes() {
     int time = par->getcurrtime();
     vector<MemberListEntry>::iterator it = memberNode->memberList.begin();
     while ( it != memberNode->memberList.end() ) {
         if ( time - it->gettimestamp() > TREMOVE ) {
-            // if TREMOVE times out, remove node from membership list
+            // check if TREMOVE has timed out
 #ifdef DEBUGLOG
             Address addr = getAddress(it->getid(), it->getport());
             log->logNodeRemove(&memberNode->addr, &addr);
 #endif
-
-            // it = memberNode->memberList.erase(it);
-            it++;
+            // remove the node from the membership list
+            it = memberNode->memberList.erase(it);
         } else {
-            if ( time - it->gettimestamp() > TFAIL ) {
-                /** if TFAIL times out, mark node as timed out
-                 * TODO: add timed out node to map
-                 */
-            }
             it++;
         }
     }
