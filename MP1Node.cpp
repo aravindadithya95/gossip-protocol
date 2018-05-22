@@ -301,7 +301,7 @@ void MP1Node::printAddress(Address *addr) {
 /**
  * FUNCTION NAME: serializeMemberList
  * 
- * DESCRIPTION: Serialize the memebership list
+ * DESCRIPTION: Serialize the membership list
  */
 char * MP1Node::serializeMemberList() {
     char *serializedList;
@@ -321,7 +321,7 @@ char * MP1Node::serializeMemberList() {
 /**
  * FUNCTION NAME: deserializeMemberList
  * 
- * DESCRIPTION: Deserialize the memebership list
+ * DESCRIPTION: Deserialize the membership list
  */
 vector<MemberListEntry> MP1Node::deserializeMemberList(char *data, int size) {
     vector<MemberListEntry> memberList;
@@ -489,7 +489,7 @@ void MP1Node::gossipMemberList(int n) {
 
     n = min(n, size);
     for ( int i = 0; i < n; i++ ) {
-        int idx = rand() % (memberNode->memberList.size() - 1);
+        int idx = rand() % memberNode->memberList.size();
 
         Address addr = getAddress(
             memberNode->memberList[idx].getid(), memberNode->memberList[idx].getport()
@@ -518,8 +518,9 @@ void MP1Node::checkMemberList() {
             Address addr = getAddress(it->getid(), it->getport());
             log->logNodeRemove(&memberNode->addr, &addr);
 #endif
-            it = memberNode->memberList.erase(it);
-            // it++;
+
+            // it = memberNode->memberList.erase(it);
+            it++;
         } else {
             if ( time - it->gettimestamp() > TFAIL ) {
                 /** if TFAIL times out, mark node as timed out
